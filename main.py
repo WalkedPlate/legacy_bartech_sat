@@ -115,10 +115,10 @@ async def tts_endpoint(text: str = Form(...)):
         # audio_path = synthesize(text)
 
         # Coqui:
-        # audio_path = synthesize_alternative(text)
+        audio_path = synthesize_alternative(text)
 
         # Sherpa:
-        audio_path = synthesize_sherpa(text)
+        # audio_path = synthesize_sherpa(text)
 
         media_type = "audio/ogg" if audio_path.endswith(".wav") else "audio/wav"
         filename = "output.wav" if audio_path.endswith(".wav") else "output.wav"

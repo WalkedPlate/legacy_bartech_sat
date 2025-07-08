@@ -112,10 +112,10 @@ async def tts_endpoint(text: str = Form(...)):
             raise HTTPException(status_code=400, detail="Texto vacío")
 
         # Piper:
-        # audio_path = synthesize(text)
+        audio_path = synthesize(text)
 
         # Coqui:
-        audio_path = synthesize_alternative(text)
+        # audio_path = synthesize_alternative(text)
 
         # Sherpa:
         # audio_path = synthesize_sherpa(text)

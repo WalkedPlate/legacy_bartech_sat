@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Configuración global
-SHERPA_MODELS_DIR = Path("C:/sherpa_models")
+SHERPA_MODELS_DIR = Path("/opt/sherpa_models")
 DEFAULT_MODEL = "es_ES-davefx-medium"
 
 # Variables globales para mantener el modelo cargado

@@ -1,18 +1,11 @@
 import subprocess
 import uuid
 import os
-from pathlib import Path
-import time
-
-import subprocess
-import uuid
-import os
 import platform
 from pathlib import Path
 import time
 
 
-# Configuración multiplataforma
 def get_piper_config():
     """Detecta el sistema operativo y configura rutas apropiadas"""
 
@@ -25,8 +18,6 @@ def get_piper_config():
             raise FileNotFoundError(f"Carpeta Piper no encontrada en {piper_dir}")
 
         piper_exe = piper_dir / "piper.exe"
-        # voice_file = piper_dir / "voices" / "es_ES-davefx-medium.onnx"
-        # voice_file = piper_dir / "voices" / "es_MX-claude-high.onnx"  # Voz mexicana
         voice_file = piper_dir / "voices" / "es_ES-sharvard-medium.onnx"
 
         # Verificar archivos críticos
@@ -42,11 +33,28 @@ def get_piper_config():
             "ESPEAK_DATA": None
         }
     else:
-        # (configuración original de Edward)
+        # Configuración para Linux (Rocky Linux)
+        piper_dir = Path("/opt/piper")
+
+        # Verificar que existe la carpeta
+        if not piper_dir.exists():
+            raise FileNotFoundError(f"Carpeta Piper no encontrada en {piper_dir}. Ejecuta el script de instalación.")
+
+        piper_exe = piper_dir / "piper" / "piper"
+        voice_file = piper_dir / "voices" / "es_ES-sharvard-medium.onnx"
+        espeak_data = Path("/usr/share/espeak-ng-data")
+
+        # Verificar archivos críticos
+        if not piper_exe.exists():
+            raise FileNotFoundError(f"piper no encontrado en {piper_exe}")
+
+        if not voice_file.exists():
+            raise FileNotFoundError(f"Modelo de voz no encontrado en {voice_file}")
+
         return {
-            "PIPER_EXEC": "/home/edward/piper/piper",
-            "VOICE_PATH": "/home/edward/voices/es_MX-claude-high.onnx",
-            "ESPEAK_DATA": "/home/edward/espeak-ng-data"
+            "PIPER_EXEC": str(piper_exe.absolute()),
+            "VOICE_PATH": str(voice_file.absolute()),
+            "ESPEAK_DATA": str(espeak_data) if espeak_data.exists() else None
         }
 
 
@@ -56,8 +64,10 @@ try:
     PIPER_EXEC = config["PIPER_EXEC"]
     VOICE_PATH = config["VOICE_PATH"]
     ESPEAK_DATA = config["ESPEAK_DATA"]
-    print(f"Piper configurado: {PIPER_EXEC}")
+    print(f"Piper configurado para {platform.system()}: {PIPER_EXEC}")
     print(f"Voz configurada: {VOICE_PATH}")
+    if ESPEAK_DATA:
+        print(f"Espeak data: {ESPEAK_DATA}")
 except Exception as e:
     print(f"Error configurando Piper: {e}")
     PIPER_EXEC = None
@@ -66,7 +76,7 @@ except Exception as e:
 
 
 def synthesize_to_wav(text: str) -> str:
-    """Síntesis de voz con Piper - versión corregida para Windows"""
+    """Síntesis de voz con Piper - multiplataforma"""
 
     if not PIPER_EXEC or not VOICE_PATH:
         raise RuntimeError("Piper no está configurado correctamente")
@@ -76,7 +86,7 @@ def synthesize_to_wav(text: str) -> str:
     output_wav = Path("audio_out") / f"{uuid.uuid4()}.wav"
 
     try:
-        # Comando con rutas absolutas
+        # Comando básico
         command = [
             PIPER_EXEC,
             "--model",
@@ -85,13 +95,12 @@ def synthesize_to_wav(text: str) -> str:
             str(output_wav.absolute())
         ]
 
-        # NO agregar espeak-ng-data en Windows
-        if ESPEAK_DATA and os.path.exists(ESPEAK_DATA):
+        # Agregar espeak-ng-data solo si existe y estamos en Linux
+        if ESPEAK_DATA and os.path.exists(ESPEAK_DATA) and platform.system() != "Windows":
             command.extend(["--espeak-ng-data", ESPEAK_DATA])
 
-        print(f"🔧 Ejecutando comando: {' '.join(command)}")
-        print(f"📁 Directorio trabajo: {os.getcwd()}")
-        print(f"📝 Texto a sintetizar: '{text}'")
+        print(f"🔧 Ejecutando Piper: {platform.system()}")
+        print(f"📝 Texto: '{text[:50]}...'")
 
         # Ejecutar proceso
         process = subprocess.Popen(
@@ -100,15 +109,15 @@ def synthesize_to_wav(text: str) -> str:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            cwd=os.getcwd()  # Directorio de trabajo explícito
+            cwd=os.getcwd()
         )
 
         # Comunicar con timeout
-        stdout, stderr = process.communicate(input=text, timeout=15)
+        stdout, stderr = process.communicate(input=text, timeout=30)
 
         print(f"🔍 Return code: {process.returncode}")
-        print(f"📤 Stdout: '{stdout}'")
-        print(f"📤 Stderr: '{stderr}'")
+        if process.returncode != 0:
+            print(f"📤 Stderr: '{stderr}'")
 
         # Verificar éxito
         if process.returncode != 0:
@@ -124,11 +133,11 @@ def synthesize_to_wav(text: str) -> str:
         return str(output_wav)
 
     except subprocess.TimeoutExpired:
-        print("Timeout: Piper tomó más de 15 segundos")
+        print("⏰ Timeout: Piper tomó más de 30 segundos")
         process.kill()
-        raise RuntimeError("Piper timeout después de 15 segundos")
+        raise RuntimeError("Piper timeout después de 30 segundos")
     except Exception as e:
-        print(f"Error en synthesize_to_wav: {e}")
+        print(f"❌ Error en synthesize_to_wav: {e}")
         raise e
 
 
@@ -136,3 +145,32 @@ def synthesize(text: str) -> str:
     """Función principal de síntesis"""
     return synthesize_to_wav(text)
 
+
+def get_system_info() -> dict:
+    """Información del sistema para debugging"""
+    return {
+        "platform": platform.system(),
+        "piper_exec": PIPER_EXEC,
+        "voice_path": VOICE_PATH,
+        "espeak_data": ESPEAK_DATA,
+        "piper_exists": PIPER_EXEC and os.path.exists(PIPER_EXEC) if PIPER_EXEC else False,
+        "voice_exists": VOICE_PATH and os.path.exists(VOICE_PATH) if VOICE_PATH else False,
+        "espeak_exists": ESPEAK_DATA and os.path.exists(ESPEAK_DATA) if ESPEAK_DATA else False
+    }
+
+
+# Test básico al importar
+if __name__ == "__main__":
+    info = get_system_info()
+    print("📊 Información del sistema TTS:")
+    for key, value in info.items():
+        print(f"   {key}: {value}")
+
+    if info["piper_exists"] and info["voice_exists"]:
+        try:
+            test_file = synthesize("Hola, esto es una prueba del sistema TTS")
+            print(f"✅ Prueba exitosa: {test_file}")
+        except Exception as e:
+            print(f"❌ Error en prueba: {e}")
+    else:
+        print("⚠️  No se puede probar: faltan archivos de Piper")

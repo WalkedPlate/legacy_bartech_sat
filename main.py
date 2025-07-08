@@ -11,6 +11,7 @@ import logging
 from stt_service import transcribe_optimized, transcribe_general
 from tts_service import synthesize
 from tts_service_aux import synthesize_alternative
+from tts_service_sherpa import synthesize_sherpa
 
 app = FastAPI(title="Sistema de Reconocimiento de Placas Peruanas")
 
@@ -109,9 +110,16 @@ async def tts_endpoint(text: str = Form(...)):
     try:
         if not text.strip():
             raise HTTPException(status_code=400, detail="Texto vacío")
-        
-        audio_path = synthesize_alternative(text)
-        
+
+        # Piper:
+        # audio_path = synthesize(text)
+
+        # Coqui:
+        # audio_path = synthesize_alternative(text)
+
+        # Sherpa:
+        audio_path = synthesize_sherpa(text)
+
         media_type = "audio/ogg" if audio_path.endswith(".wav") else "audio/wav"
         filename = "output.wav" if audio_path.endswith(".wav") else "output.wav"
         

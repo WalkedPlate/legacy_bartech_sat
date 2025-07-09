@@ -13,24 +13,19 @@ def get_piper_config():
         # Configuración para Windows
         piper_dir = Path("C:/piper")
 
-        # Verificar que existe la carpeta
         if not piper_dir.exists():
             raise FileNotFoundError(f"Carpeta Piper no encontrada en {piper_dir}")
 
         piper_exe = piper_dir / "piper.exe"
-        # Usar voz claude como preferida
         voice_file = piper_dir / "voices" / "es_MX-claude-high.onnx"
 
-        # Fallback a otras voces si claude no está disponible
         if not voice_file.exists():
             voice_file = piper_dir / "voices" / "es_ES-sharvard-medium.onnx"
         if not voice_file.exists():
             voice_file = piper_dir / "voices" / "es_ES-davefx-medium.onnx"
 
-        # Verificar archivos críticos
         if not piper_exe.exists():
             raise FileNotFoundError(f"piper.exe no encontrado en {piper_exe}")
-
         if not voice_file.exists():
             raise FileNotFoundError(f"Modelo de voz no encontrado. Verifica que tengas voces en {piper_dir}/voices/")
 
@@ -40,36 +35,75 @@ def get_piper_config():
             "ESPEAK_DATA": None
         }
     else:
-        # Configuración para Linux (Rocky Linux )
-        piper_exec = os.getenv("PIPER_EXEC", "/opt/piper/piper/piper")
+        # Configuración para Linux (Rocky Linux)
 
-        # Preferir claude, fallback a sharvard
-        voice_path = os.getenv("VOICE_PATH")
-        if not voice_path:
-            # Buscar claude primero
-            claude_voice = "/opt/piper/voices/es_MX-claude-high.onnx"
-            sharvard_voice = "/opt/piper/voices/es_ES-sharvard-medium.onnx"
+        # 1. Buscar piper en entorno virtual actual
+        current_dir = os.getcwd()
+        venv_piper = os.path.join(current_dir, "venv_310", "bin", "piper")
 
-            if os.path.exists(claude_voice):
-                voice_path = claude_voice
-            elif os.path.exists(sharvard_voice):
-                voice_path = sharvard_voice
-            else:
-                voice_path = claude_voice  # Default para error mensaje
+        piper_exec = None
+        if os.path.exists(venv_piper):
+            piper_exec = venv_piper
+        else:
+            # Buscar en ubicaciones del sistema
+            possible_locations = [
+                "/usr/local/bin/piper",
+                "/opt/piper/piper/piper",
+                "/usr/bin/piper"
+            ]
 
-        espeak_data = Path("/usr/share/espeak-ng-data")
+            for location in possible_locations:
+                if os.path.exists(location):
+                    piper_exec = location
+                    break
 
-        # Verificar archivos críticos
-        if not os.path.exists(piper_exec):
-            raise FileNotFoundError(f"piper no encontrado en {piper_exec}")
+        # 2. Buscar voces (Claude primero)
+        voice_search_paths = [
+            "/opt/piper/voices",
+            "/usr/share/piper/voices",
+            "/var/lib/piper/voices"
+        ]
 
-        if not os.path.exists(voice_path):
-            raise FileNotFoundError(f"Modelo de voz no encontrado en {voice_path}")
+        preferred_voices = [
+            "es_MX-claude-high.onnx",  # Principal
+            "es_ES-sharvard-medium.onnx",  # Secundaria
+            "es_ES-davefx-medium.onnx"  # Terciaria
+        ]
+
+        voice_path = None
+        for search_path in voice_search_paths:
+            if voice_path:
+                break
+            for voice_name in preferred_voices:
+                candidate_path = os.path.join(search_path, voice_name)
+                if os.path.exists(candidate_path):
+                    voice_path = candidate_path
+                    break
+
+        # 3. Buscar espeak-ng-data
+        espeak_locations = [
+            "/opt/piper/piper/espeak-ng-data",
+            "/usr/share/espeak-ng-data",
+            "/usr/local/share/espeak-ng-data"
+        ]
+
+        espeak_data = None
+        for location in espeak_locations:
+            if os.path.exists(location):
+                espeak_data = location
+                break
+
+        # 4. Verificar archivos críticos
+        if not piper_exec or not os.path.exists(piper_exec):
+            raise FileNotFoundError(f"piper no encontrado. Ejecutable buscado: {venv_piper}")
+
+        if not voice_path or not os.path.exists(voice_path):
+            raise FileNotFoundError(f"Modelo de voz no encontrado en /opt/piper/voices/")
 
         return {
             "PIPER_EXEC": piper_exec,
             "VOICE_PATH": voice_path,
-            "ESPEAK_DATA": str(espeak_data) if espeak_data.exists() else None
+            "ESPEAK_DATA": espeak_data
         }
 
 
@@ -82,7 +116,8 @@ try:
 
     # Mostrar configuración detectada
     voice_name = Path(VOICE_PATH).stem
-    print(f"Piper configurado para {platform.system()}")
+    piper_source = "Python venv" if "venv_310" in PIPER_EXEC else "Sistema"
+    print(f"Piper configurado para {platform.system()} ({piper_source})")
     print(f"Ejecutable: {PIPER_EXEC}")
     print(f"Voz: {voice_name}")
     if ESPEAK_DATA:
@@ -114,10 +149,6 @@ def synthesize_to_wav(text: str) -> str:
             "--output-file",
             str(output_wav.absolute())
         ]
-
-        # Agregar espeak-ng-data solo si existe y estamos en Linux
-        if ESPEAK_DATA and os.path.exists(ESPEAK_DATA) and platform.system() != "Windows":
-            command.extend(["--espeak-ng-data", ESPEAK_DATA])
 
         print(f"Ejecutando Piper ({platform.system()})")
         print(f"Texto: '{text[:50]}{'...' if len(text) > 50 else ''}'")
@@ -177,7 +208,7 @@ def get_system_info() -> dict:
         "piper_exists": PIPER_EXEC and os.path.exists(PIPER_EXEC) if PIPER_EXEC else False,
         "voice_exists": VOICE_PATH and os.path.exists(VOICE_PATH) if VOICE_PATH else False,
         "espeak_exists": ESPEAK_DATA and os.path.exists(ESPEAK_DATA) if ESPEAK_DATA else False,
-        "is_docker": os.getenv("PIPER_EXEC") is not None
+        "is_venv": "venv_310" in (PIPER_EXEC or "")
     }
 
 
@@ -188,9 +219,19 @@ def list_available_voices() -> list:
     if platform.system() == "Windows":
         voices_dir = Path("C:/piper/voices")
     else:
-        voices_dir = Path("/opt/piper/voices")
+        possible_dirs = [
+            Path("/opt/piper/voices"),
+            Path("/usr/share/piper/voices"),
+            Path("/var/lib/piper/voices")
+        ]
 
-    if voices_dir.exists():
+        voices_dir = None
+        for dir_path in possible_dirs:
+            if dir_path.exists():
+                voices_dir = dir_path
+                break
+
+    if voices_dir and voices_dir.exists():
         for onnx_file in voices_dir.glob("*.onnx"):
             json_file = voices_dir / f"{onnx_file.stem}.onnx.json"
             voices.append({
@@ -205,7 +246,6 @@ def list_available_voices() -> list:
 
 # Test básico al importar
 if __name__ == "__main__":
-    print("=" * 50)
     print("PIPER TTS - INFORMACIÓN DEL SISTEMA")
     print("=" * 50)
 

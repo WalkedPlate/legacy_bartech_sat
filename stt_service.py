@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 try:
-    model = whisper.load_model("base", device="cuda" if whisper.torch.cuda.is_available() else "cpu")
+    model = whisper.load_model("small", device="cuda" if whisper.torch.cuda.is_available() else "cpu")
 except Exception:
     model = whisper.load_model("tiny")
 

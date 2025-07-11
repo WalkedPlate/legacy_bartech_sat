@@ -81,19 +81,27 @@ async def stt_endpoint(audio: UploadFile = File(...)):
                 os.remove(temp_path)
             except Exception:
                 pass
+
+
 @app.post("/tts")
 async def tts_endpoint(text: str = Form(...)):
     try:
         if not text.strip():
             raise HTTPException(status_code=400, detail="Texto vacío")
+
         audio_path = synthesize(text)
-        media_type = "audio/ogg" if audio_path.endswith(".wav") else "audio/wav"
-        filename = "output.wav" if audio_path.endswith(".wav") else "output.wav"
+        media_type = "audio/wav"
+        filename = "output.wav"
+
+        # AGREGAR: Configurar headers para eliminación automática
         return FileResponse(
             audio_path,
             media_type=media_type,
             filename=filename,
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Cache-Control": "no-cache, no-store, must-revalidate"
+            }
         )
     except Exception as e:
         logging.error(f"Error en TTS: {e}")

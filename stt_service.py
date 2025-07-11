@@ -64,7 +64,7 @@ def validate_audio_file(audio_path: str) -> Tuple[bool, str]:
         return False, "Archivo de audio muy grande (máximo 25MB)"
     return True, ""
 def convert_to_opus_optimized(input_path: str) -> Optional[str]:
-    output_path = f"/tmp/audio_{int(time.time())}.opus"
+    output_path = f"/tmp/stt_tts_audio_{int(time.time())}.opus"
     try:
         subprocess.run([
             "ffmpeg", "-y", "-i", input_path,

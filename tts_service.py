@@ -136,9 +136,12 @@ def synthesize_to_wav(text: str) -> str:
     if not PIPER_EXEC or not VOICE_PATH:
         raise RuntimeError("Piper no está configurado correctamente")
 
-    # Crear directorio de salida
-    Path("audio_out").mkdir(exist_ok=True)
-    output_wav = Path("audio_out") / f"{uuid.uuid4()}.wav"
+    # Crear directorio de salida (DESCOMENTAR PARA USAR EN Windows)
+    # Path("audio_out").mkdir(exist_ok=True)
+    # output_wav = Path("audio_out") / f"{uuid.uuid4()}.wav"
+
+    # Usar directorio temporal del sistema (Rocky Linux 8.10)
+    output_wav = Path("/tmp") / f"stt_tts_{uuid.uuid4()}.wav"
 
     try:
         # Comando básico

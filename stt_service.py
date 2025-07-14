@@ -6,11 +6,12 @@ from typing import Optional, Tuple
 from pathlib import Path
 import time
 from faster_whisper import WhisperModel
+
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 # Cargar modelo de Faster-Whisper
 try:
-    model = WhisperModel("small", device="cpu", compute_type="int8")
+    model = WhisperModel("medium", device="cpu", compute_type="int8")
 except Exception as e:
     logger.error(f"No se pudo cargar el modelo: {e}")
     raise
@@ -22,7 +23,23 @@ NUM_WORDS = {
     "sei": "6", "siet": "7", "och": "8", "nuev": "9",
     "el cero": "0", "el uno": "1", "el dos": "2", "el tres": "3",
     "el cuatro": "4", "el cinco": "5", "el seis": "6", "el siete": "7",
-    "el ocho": "8", "el nueve": "9"
+    "el ocho": "8", "el nueve": "9",
+
+    "sero": "0", "huno": "1", "dose": "2", "trez": "3", "quattro": "4",
+    "sinco": "5", "zinco": "5", "seys": "6", "ceiz": "6", "ciete": "7",
+    "syete": "7", "hoche": "8", "nuebe": "9", "nuevé": "9",
+
+    "la cero": "0", "el zero": "0", "la zero": "0", "la uno": "1",
+    "el una": "1", "la una": "1", "la dos": "2", "el dose": "2",
+    "la dose": "2", "la tres": "3", "el trez": "3", "la trez": "3",
+    "la cuatro": "4", "el quattro": "4", "la quattro": "4", "la cinco": "5",
+    "el sinco": "5", "la sinco": "5", "la seis": "6", "el seys": "6",
+    "la seys": "6", "la siete": "7", "el ciete": "7", "la ciete": "7",
+    "la ocho": "8", "el hoche": "8", "la hoche": "8", "la nueve": "9",
+    "el nuebe": "9", "la nuebe": "9",
+
+    "diez": "10", "dies": "10", "diés": "10", "once": "11", "onse": "11",
+    "honse": "11", "doce": "12", "doze": "12"
 }
 LETTERS = {
     "a": "A", "be": "B", "ce": "C", "de": "D", "e": "E", "efe": "F",
@@ -30,6 +47,7 @@ LETTERS = {
     "eme": "M", "ene": "N", "o": "O", "pe": "P", "cu": "Q", "ere": "R",
     "ese": "S", "te": "T", "u": "U", "uve": "V", "ve": "V", "doble ve": "W",
     "equis": "X", "ye": "Y", "zeta": "Z",
+
     "la a": "A", "la be": "B", "la ce": "C", "la de": "D", "la e": "E",
     "la efe": "F", "la ge": "G", "la hache": "H", "la i": "I", "la jota": "J",
     "la ka": "K", "la ele": "L", "la eme": "M", "la ene": "N", "la o": "O",
@@ -39,11 +57,56 @@ LETTERS = {
     "i griega": "Y", "la i griega": "Y",
     "doble u": "W", "uve doble": "W",
     "be grande": "B", "be larga": "B",
-    "ve corta": "V", "ve chica": "V", "ve pequeña": "V"
+    "ve corta": "V", "ve chica": "V", "ve pequeña": "V",
+
+    "ha": "A", "ah": "A", "se": "C", "ze": "C", "dé": "D", "dhe": "D",
+    "he": "E", "eh": "E", "hefe": "F", "eph": "F", "gue": "G", "je": "G",
+    "ache": "H", "hace": "H", "ash": "H", "hi": "I", "hota": "J", "jotta": "J",
+    "yota": "J", "ca": "K", "kha": "K", "elle": "L", "el": "L", "em": "M",
+    "emme": "M", "en": "N", "enne": "N", "ho": "O", "oh": "O", "pé": "P",
+    "phe": "P", "que": "Q", "khu": "Q", "erre": "R", "rre": "R", "er": "R",
+    "sse": "S", "té": "T", "the": "T", "hu": "U", "uh": "U", "ube": "V",
+    "doble uve": "W", "uve doble": "W", "ekis": "X", "ex": "X", "equys": "X",
+    "yé": "Y", "greek i": "Y", "seta": "Z", "zetta": "Z", "zet": "Z",
+
+    "la ha": "A", "el ha": "A", "la ah": "A", "la se": "C", "el se": "C",
+    "la ze": "C", "la dé": "D", "el dé": "D", "la dhe": "D", "la he": "E",
+    "el he": "E", "la eh": "E", "la hefe": "F", "el hefe": "F", "la eph": "F",
+    "la gue": "G", "el gue": "G", "la je": "G", "la ache": "H", "el ache": "H",
+    "la hace": "H", "la hi": "I", "el hi": "I", "la hota": "J", "el hota": "J",
+    "la jotta": "J", "la ca": "K", "el ca": "K", "la kha": "K", "la elle": "L",
+    "el elle": "L", "la el": "L", "la em": "M", "el em": "M", "la emme": "M",
+    "la en": "N", "el en": "N", "la enne": "N", "la ho": "O", "el ho": "O",
+    "la oh": "O", "la pé": "P", "el pé": "P", "la phe": "P", "la que": "Q",
+    "el que": "Q", "la khu": "Q", "la erre": "R", "el erre": "R", "la rre": "R",
+    "la sse": "S", "el sse": "S", "la té": "T", "el té": "T", "la the": "T",
+    "la hu": "U", "el hu": "U", "la uh": "U", "la ube": "V", "el ube": "V",
+    "la doble uve": "W", "el doble uve": "W", "la uve doble": "W", "la ekis": "X",
+    "el ekis": "X", "la ex": "X", "la yé": "Y", "el yé": "Y", "la greek i": "Y",
+    "la seta": "Z", "el seta": "Z", "la zetta": "Z",
+
+    "ve grande": "B", "la ve grande": "B", "el ve grande": "B",
+    "doble u ve": "W", "la doble u ve": "W", "uve de doble": "W",
+    "i de griega": "Y", "la i de griega": "Y", "griega": "Y"
+}
+corrections = {
+        'ache': 'hache', 'doble u': 'doble uve', 'greek': 'griega',
+        'double': 'doble', 'uve de': 'uve', 'be de': 'be',
+        
+        'sero': 'cero', 'huno': 'uno', 'dose': 'dos', 'trez': 'tres',
+        'quattro': 'cuatro', 'sinco': 'cinco', 'seys': 'seis', 
+        'ciete': 'siete', 'hoche': 'ocho', 'nuebe': 'nueve',
+        
+        'el sero': 'el cero', 'la dose': 'la dos', 'el trez': 'el tres',
+        'la quattro': 'la cuatro', 'el sinco': 'el cinco', 'la seys': 'la seis',
+        'el ciete': 'el siete', 'la hoche': 'la ocho', 'el nuebe': 'el nueve'
 }
 AFFIRMATIVE_KEYWORDS = {"sí", "ok", "de acuerdo", "correcto", "afirmativo", "claro", "vale", "exacto", "es correcto", "es así"}
 NEGATIVE_KEYWORDS = {"no", "negativo", "incorrecto", "para nada", "no es así", "no quiero", "nunca", "jamás"}
-VALID_ZONES = set("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+VALID_ZONES = {
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", 
+    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+}
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
 def detect_confirmation(text: str) -> bool | None:
     lowered = text.lower()
@@ -83,36 +146,70 @@ def clean_text(text: str) -> str:
     return re.sub(r'\s+', ' ', text)
 def extract_chars(text: str) -> str:
     words = clean_text(text).split()
+    print (words)
     chars = []
     i = 0
     while i < len(words):
         word = words[i]
-        if i + 1 < len(words):
+        processed = False
+        if i + 2 < len(words):
+            three_word = f"{word} {words[i+1]} {words[i+2]}"
+            if three_word in LETTERS:
+                chars.append(LETTERS[three_word])
+                i += 3
+                processed = True
+                continue
+            elif three_word in NUM_WORDS:
+                chars.append(NUM_WORDS[three_word])
+                i += 3
+                processed = True
+                continue
+        if i + 1 < len(words) and not processed:
             two_word = f"{word} {words[i+1]}"
             if two_word in LETTERS:
                 chars.append(LETTERS[two_word])
                 i += 2
+                processed = True
                 continue
-            if two_word in NUM_WORDS:
+            elif two_word in NUM_WORDS:
                 chars.append(NUM_WORDS[two_word])
                 i += 2
+                processed = True
                 continue
-        if word in LETTERS:
-            chars.append(LETTERS[word])
-        elif word in NUM_WORDS:
-            chars.append(NUM_WORDS[word])
-        elif word.isdigit() and len(word) <= 4:
-            chars.extend(word)
-        elif word.isalpha() and len(word) <= 3:
-            chars.extend(list(word.upper()))
+        if not processed:
+            if word in LETTERS:
+                chars.append(LETTERS[word])
+                processed = True
+            elif word in NUM_WORDS:
+                chars.append(NUM_WORDS[word])
+                processed = True
+            elif word.isdigit() and len(word) <= 4:
+                chars.extend(word)
+                processed = True
+            elif word.isalpha() and len(word) <= 3:
+                chars.extend(list(word.upper()))
+                processed = True
+            else:
+                corrected = word_correction(word)
+                if corrected:
+                    chars.append(corrected)
+                    processed = True
+                else:
+                    print(f"Palabra no reconocida: '{word}'")
         i += 1
-    return ''.join(chars)
+    result = ''.join(chars)
+    print(f"Caracteres extraídos: {result}")
+    return result
 def is_suspicious_plate(letters: str, numbers: str) -> bool:
     if len(set(letters)) == 1 or len(set(numbers)) == 1:
         return True
-    if numbers in ['000', '0000']:
+    suspicious_numbers = ['000', '111', '222', '333', '444', '555', '666', '777', '888', '999']
+    if numbers in suspicious_numbers:
         return True
-    suspicious_combos = ['AAA', 'BBB', 'CCC', 'XXX', 'ZZZ']
+    suspicious_combos = ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF', 'GGG', 'HHH',
+        'III', 'JJJ', 'KKK', 'LLL', 'MMM', 'NNN', 'OOO', 'PPP',
+        'QQQ', 'RRR', 'SSS', 'TTT', 'UUU', 'VVV', 'WWW', 'XXX',
+        'YYY', 'ZZZ']
     if letters in suspicious_combos:
         return True
     return False
@@ -121,21 +218,28 @@ def extract_plate(text: str) -> Optional[str]:
     patterns = [
         r'\b([A-Z]{3})[-\s]*(\d{3})\b',
         r'\b([A-Z]{2})[-\s]*(\d{4})\b',
+        r'\b([A-Z]{3})(\d{3})\b',
+        r'\b([A-Z]{3})\s+(\d{3})\b',
+        r'\b([A-Z])\s+([A-Z])\s+([A-Z])\s+(\d)\s+(\d)\s+(\d)\b',
     ]
-    for pat in patterns:
-        match = re.search(pat, text)
-        if match and match.group(1)[0] in VALID_ZONES:
-            letters, numbers = match.groups()
-            if not is_suspicious_plate(letters, numbers):
+    for pattern  in patterns:
+        matches = re.findall(pattern, text)
+        for match in matches:
+            if len(match) == 2:
+                letters, numbers = match
+            elif len(match) == 6:
+                letters = ''.join(match[:3])
+                numbers = ''.join(match[3:])
+            else:
+                continue
+            if (letters[0] in VALID_ZONES and 
+                not is_suspicious_plate(letters, numbers)):
                 return f"{letters}-{numbers}"
     chars = extract_chars(text)
     if len(chars) >= 6:
-        if (chars[:3].isalpha() and chars[3:6].isdigit() and chars[0] in VALID_ZONES):
+        if (chars[:3].isalpha() and chars[3:6].isdigit() and 
+            chars[0] in VALID_ZONES):
             letters, numbers = chars[:3], chars[3:6]
-            if not is_suspicious_plate(letters, numbers):
-                return f"{letters}-{numbers}"
-        if (chars[:2].isalpha() and chars[2:6].isdigit() and chars[0] in VALID_ZONES):
-            letters, numbers = chars[:2], chars[2:6]
             if not is_suspicious_plate(letters, numbers):
                 return f"{letters}-{numbers}"
     return None
@@ -167,7 +271,11 @@ def transcribe_optimized(audio_path: str) -> dict:
             return {"success": False, "plate": None,
                    "message": "No se detectó voz clara en el audio",
                    "processing_time": time.time() - start_time}
-        segments, info = model.transcribe(opus_path, language="es")
+        segments, info = model.transcribe(opus_path, language="es",beam_size=5,best_of=5,
+        temperature=0.0,
+        compression_ratio_threshold=2.4,
+        log_prob_threshold=-1.0,
+        no_speech_threshold=0.6)
         text = ''.join([seg.text for seg in segments]).strip()
         if not text or len(text) < 3:
             return {"success": False, "plate": None,
@@ -235,3 +343,20 @@ def transcribe(audio_path: str) -> dict:
         return {"text": result.get("raw_text", ""), "message": result["plate"]}
     else:
         return {"text": result.get("raw_text", ""), "message": result["message"]}
+
+def word_correction(word: str) -> Optional[str]:
+    if word in corrections:
+        corrected_word = corrections[word]
+        if corrected_word in LETTERS:
+            return LETTERS[corrected_word]
+        elif corrected_word in NUM_WORDS:
+            return NUM_WORDS[corrected_word]
+    all_words = list(LETTERS.keys()) + list(NUM_WORDS.keys())
+    matches = difflib.get_close_matches(word, all_words, n=1, cutoff=0.7)
+    if matches:
+        best_match = matches[0]
+        if best_match in LETTERS:
+            return LETTERS[best_match]
+        elif best_match in NUM_WORDS:
+            return NUM_WORDS[best_match]
+    return None

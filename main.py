@@ -10,7 +10,6 @@ import logging
 from stt_service import transcribe_optimized, transcribe_general
 from tts_service import synthesize
 from fastapi.concurrency import run_in_threadpool
-
 # from tts_service_aux import synthesize_alternative
 app = FastAPI(title="Sistema de Reconocimiento de Placas Peruanas")
 app.add_middleware(

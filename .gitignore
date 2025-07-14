@@ -1,0 +1,47 @@
+# Entornos virtuales
+venv/
+.env/
+.venv/
+
+# Archivos compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs y archivos temporales
+*.log
+*.tmp
+*.swp
+*.bak
+
+# Archivos de configuración de IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de test/reportes temporales
+htmlcov/
+.tox/
+.nox/
+coverage.*
+.cache
+pytest_cache/
+.pytest_cache/
+nosetests.xml
+test-results.xml
+
+# Archivos temporales creados por pip
+pip-wheel-metadata/
+
+# Archivos de audio generados en tiempo de ejecución
+temp_audio/
+audio_out/
+
+# Otros
+*.sqlite3
+.envrc

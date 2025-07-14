@@ -6,6 +6,9 @@ from typing import Optional, Tuple
 from pathlib import Path
 import time
 from faster_whisper import WhisperModel
+import tempfile
+from difflib import SequenceMatcher
+import re
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -314,16 +317,49 @@ def transcribe_general(audio_path: str) -> dict:
         if not opus_path or not os.path.exists(opus_path):
             return {"success": False, "confirmation": None,
                     "message": "No se detectó voz clara en el audio"}
-        segments, _ = model.transcribe(opus_path, language="es")
-        text = ''.join([seg.text for seg in segments]).strip()
-        if not text or len(text) < 3:
-            return {"success": False, "confirmation": None,
-                    "message": "No se detectó voz clara en el audio"}
-        confirmation = detect_confirmation(text)
+        segments, _ = model.transcribe(opus_path, 
+        language="es",
+        beam_size=5,
+        best_of=5,
+        temperature=[0.0, 0.2, 0.4, 0.6, 0.8],
+        compression_ratio_threshold=2.4,
+        log_prob_threshold=-1.0,
+        no_speech_threshold=0.6,
+        condition_on_previous_text=False, 
+        word_timestamps=True,
+        initial_prompt="Respuesta corta en español: e, s, t, sí, no, números")
+        text_segments = []
+        for seg in segments:
+            if seg.avg_logprob > -0.8:
+               text_segments.append(seg.text)
+        raw_text = ''.join(text_segments).strip()
+        if not raw_text or len(raw_text) < 1:
+          return {
+            "success": False, 
+            "confirmation": None,
+            "message": "No se detectó voz clara en el audio",
+            "raw": raw_text
+          }
+        print(f" raw_text: {raw_text}")
+        corrected_text = correct_common_errors(raw_text)
+        print(f" corrected_text: {corrected_text}")
+        validated_text = validate_first_character(corrected_text)
+        print(f" validated_text: {validated_text}")
+        if validated_text is None:
+           return {
+            "success": False,
+            "confirmation": None,
+            "message": f"Texto detectado '{raw_text}' no comienza con carácter válido (número, E, S, T)",
+            "raw": raw_text,
+            "corrected": corrected_text
+           }
+        cleaned = re.sub(r'\W+', '', validated_text)
+        print(f" validated_text2: {cleaned}")
+        confirmation = detect_confirmation_enhanced(cleaned)
         return {
-            "success": True,
-            "raw": text,
-            "confirmation": confirmation
+        "success": True,
+        "raw": cleaned,
+        "confirmation": confirmation,
         }
     except Exception as e:
         logger.error(f"Error en transcripción: {e}")
@@ -360,3 +396,127 @@ def word_correction(word: str) -> Optional[str]:
         elif best_match in NUM_WORDS:
             return NUM_WORDS[best_match]
     return None
+def correct_common_errors(text):
+    numbers_to_digits = {
+        'cero': '0', 'zero': '0',
+        'uno': '1', 'una': '1',
+        'dos': '2', 'dose': '2',
+        'tres': '3', 'tree': '3',
+        'cuatro': '4', 'quatro': '4',
+        'cinco': '5', 'zinco': '5',
+        'seis': '6', 'ses': '6',
+        'siete': '7', 'siebe': '7',
+        'ocho': '8', 'hoco': '8',
+        'nueve': '9', 'nuebe': '9',
+        'diez': '10', 'dies': '10',
+        'once': '11', 'onze': '11',
+        'doce': '12', 'doze': '12',
+        'trece': '13', 'treze': '13',
+        'catorce': '14', 'quatorze': '14',
+        'quince': '15', 'quinze': '15',
+        'dieciséis': '16', 'dieciseis': '16',
+        'diecisiete': '17', 'diecisiebe': '17',
+        'dieciocho': '18', 'diecioco': '18',
+        'diecinueve': '19', 'diecinuebe': '19',
+        'veinte': '20', 'beinte': '20',
+    }
+    
+    corrections_e = {
+        'p': 'e', 'P': 'E',
+        'be': 'e', 'pe': 'e', 'se': 'e', 'te': 'e',
+        'esé': 'e', 'ese': 'e', 'ete': 'e', 'erre': 'e',
+        'he': 'e', 'ye': 'e', 'de': 'e', 'le': 'e',
+        'me': 'e', 'ne': 'e', 're': 'e', 've': 'e',
+        'ce': 'e', 'ge': 'e', 'je': 'e', 'ke': 'e',
+        'que': 'e', 'qe': 'e', 'eh': 'e', 'ay': 'e',
+        'ei': 'e', 'ie': 'e', 'ae': 'e', 'ea': 'e'
+    }
+    
+    corrections_s = {
+        'es': 's', 'se': 's', 'ze': 's', 'ce': 's',
+        'ps': 's', 'hs': 's', 'ss': 's', 'sz': 's',
+        'as': 's', 'is': 's', 'os': 's', 'us': 's',
+        'eso': 's', 'esa': 's', 'esi': 's', 'esu': 's',
+        'si': 's', 'sy': 's', 'ts': 's', 'xs': 's',
+        'cs': 's', 'ds': 's', 'fs': 's', 'gs': 's'
+    }
+    
+    corrections_t = {
+        'te': 't', 'et': 't', 'th': 't', 'ht': 't',
+        'pt': 't', 'tt': 't', 'dt': 't', 'ct': 't',
+        'at': 't', 'it': 't', 'ot': 't', 'ut': 't',
+        'to': 't', 'ta': 't', 'ti': 't', 'tu': 't',
+        'ty': 't', 'tr': 't', 'st': 't', 'xt': 't',
+        'ft': 't', 'gt': 't', 'kt': 't', 'lt': 't',
+        'mt': 't', 'nt': 't', 'rt': 't', 'wt': 't',
+        'ta': 't'
+    }
+    
+    corrected = text.lower().strip()
+    
+    for word_num, digit in numbers_to_digits.items():
+        corrected = re.sub(r'\b' + word_num + r'\b', digit, corrected)
+    words = corrected.split()
+    if words:
+        first_word = words[0]
+        if first_word in corrections_e:
+            words[0] = corrections_e[first_word]
+        elif first_word in corrections_s:
+            words[0] = corrections_s[first_word]
+        elif first_word in corrections_t:
+            words[0] = corrections_t[first_word]
+    
+    return ' '.join(words) if words else corrected
+def validate_first_character(text):
+    if not text:
+        return None
+    
+    cleaned = text.strip().lower()
+    
+    if not cleaned:
+        return None
+    
+    first_char = cleaned[0]
+    valid_chars = ['e', 's', 't']
+    
+    if first_char.isdigit():
+        return text.strip()
+    
+    if first_char in valid_chars:
+        return text.strip()
+    
+    char_corrections_e = {
+        'p': 'e', 'b': 'e', 'a': 'e', 'i': 'e', 'o': 'e', 'u': 'e',
+        'c': 'e', 'd': 'e', 'f': 'e', 'g': 'e', 'h': 'e', 'j': 'e',
+        'k': 'e', 'l': 'e', 'm': 'e', 'n': 'e', 'q': 'e', 'r': 'e',
+        'v': 'e', 'w': 'e', 'x': 'e', 'y': 'e', 'z': 'e'
+    }
+    
+    char_corrections_s = {
+        'z': 's', 'c': 's', 'x': 's', 'sh': 's', 'ch': 's'
+    }
+    
+    char_corrections_t = {
+        'd': 't', 'th': 't', 'f': 't', 'r': 't', 'y': 't'
+    }
+    
+    if first_char in char_corrections_s:
+        corrected = char_corrections_s[first_char] + cleaned[1:]
+        return corrected
+    
+    elif first_char in char_corrections_t:
+        corrected = char_corrections_t[first_char] + cleaned[1:]
+        return corrected
+    
+    elif first_char in char_corrections_e:
+        corrected = char_corrections_e[first_char] + cleaned[1:]
+        return corrected
+    
+    return None
+def similarity_score(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
+def detect_confirmation_enhanced(text):
+    primer = text[0].upper()
+    return primer in ['E', 'T', 'S'] or primer.isdigit()
+    

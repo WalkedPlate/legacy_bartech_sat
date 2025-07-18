@@ -6,9 +6,7 @@ from typing import Optional, Tuple
 from pathlib import Path
 import time
 from faster_whisper import WhisperModel
-import tempfile
-from difflib import SequenceMatcher
-import re
+import difflib
 
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
@@ -46,7 +44,7 @@ NUM_WORDS = {
 }
 LETTERS = {
     "a": "A", "be": "B", "ce": "C", "de": "D", "e": "E", "efe": "F",
-    "ge": "G", "hache": "H", "i": "I", "jota": "J", "ka": "K", "ele": "L",
+    "ge": "G", "hache": "H", "i": "I","y":"I", "jota": "J", "ka": "K", "ele": "L",
     "eme": "M", "ene": "N", "o": "O", "pe": "P", "cu": "Q", "ere": "R",
     "ese": "S", "te": "T", "u": "U", "uve": "V", "ve": "V", "doble ve": "W",
     "equis": "X", "ye": "Y", "zeta": "Z",
@@ -64,7 +62,7 @@ LETTERS = {
 
     "ha": "A", "ah": "A", "se": "C", "ze": "C", "dé": "D", "dhe": "D",
     "he": "E", "eh": "E", "hefe": "F", "eph": "F", "gue": "G", "je": "G",
-    "ache": "H", "hace": "H", "ash": "H", "hi": "I", "hota": "J", "jotta": "J",
+    "ache": "H", "hace": "H", "ash": "H", "hi": "I","hota": "J", "jotta": "J",
     "yota": "J", "ca": "K", "kha": "K", "elle": "L", "el": "L", "em": "M",
     "emme": "M", "en": "N", "enne": "N", "ho": "O", "oh": "O", "pé": "P",
     "phe": "P", "que": "Q", "khu": "Q", "erre": "R", "rre": "R", "er": "R",
@@ -204,7 +202,15 @@ def extract_chars(text: str) -> str:
     print(f"Caracteres extraídos: {result}")
     return result
 def is_suspicious_plate(letters: str, numbers: str) -> bool:
-    if len(set(letters)) == 1 or len(set(numbers)) == 1:
+    if len(letters) != 3 or len(numbers) != 3:
+        return True  
+    if letters[1].isdigit():
+        if letters[0] == letters[2] and letters[0] not in {'A', 'B', 'C'}:
+            return True  
+    else:
+        if len(set(letters)) == 1:
+            return True
+    if len(set(numbers)) == 1:
         return True
     suspicious_numbers = ['000', '111', '222', '333', '444', '555', '666', '777', '888', '999']
     if numbers in suspicious_numbers:
@@ -224,6 +230,8 @@ def extract_plate(text: str) -> Optional[str]:
         r'\b([A-Z]{3})(\d{3})\b',
         r'\b([A-Z]{3})\s+(\d{3})\b',
         r'\b([A-Z])\s+([A-Z])\s+([A-Z])\s+(\d)\s+(\d)\s+(\d)\b',
+
+        r'\b([A-Z]\d[A-Z])[-\s]*(\d{3})\b'
     ]
     for pattern  in patterns:
         matches = re.findall(pattern, text)
@@ -240,11 +248,15 @@ def extract_plate(text: str) -> Optional[str]:
                 return f"{letters}-{numbers}"
     chars = extract_chars(text)
     if len(chars) >= 6:
-        if (chars[:3].isalpha() and chars[3:6].isdigit() and 
-            chars[0] in VALID_ZONES):
-            letters, numbers = chars[:3], chars[3:6]
-            if not is_suspicious_plate(letters, numbers):
-                return f"{letters}-{numbers}"
+        first_three = chars[:3]
+        last_three = chars[3:6]
+        valid_format = (len(first_three) == 3 and
+        (first_three.isalpha() or
+        (first_three[0].isalpha() and first_three[1].isdigit() and first_three[2].isalpha())) and
+        last_three.isdigit())
+        if valid_format and first_three[0] in VALID_ZONES:
+            if not is_suspicious_plate(first_three, last_three):
+                return f"{first_three}-{last_three}"
     return None
 def is_valid_plate(plate: Optional[str]) -> bool:
     if not plate or '-' not in plate:
@@ -253,7 +265,9 @@ def is_valid_plate(plate: Optional[str]) -> bool:
         letters, numbers = plate.split('-')
         valid_format = ((len(letters) == 3 and len(numbers) == 3) or
                        (len(letters) == 2 and len(numbers) == 4))
-        if not (letters.isalpha() and numbers.isdigit() and valid_format):
+        if not (letters[0].isalpha() and 
+        (letters[1].isalpha() or letters[1].isdigit()) and 
+        letters[2].isalpha() and numbers.isdigit() and valid_format):
             return False
         if letters[0] not in VALID_ZONES:
             return False
@@ -348,7 +362,7 @@ def transcribe_general(audio_path: str) -> dict:
         if validated_text is None:
            return {
             "success": False,
-            "confirmation": None,
+            "confirmation": False,
             "message": f"Texto detectado '{raw_text}' no comienza con carácter válido (número, E, S, T)",
             "raw": raw_text,
             "corrected": corrected_text
@@ -486,18 +500,15 @@ def validate_first_character(text):
         return text.strip()
     
     char_corrections_e = {
-        'p': 'e', 'b': 'e', 'a': 'e', 'i': 'e', 'o': 'e', 'u': 'e',
-        'c': 'e', 'd': 'e', 'f': 'e', 'g': 'e', 'h': 'e', 'j': 'e',
-        'k': 'e', 'l': 'e', 'm': 'e', 'n': 'e', 'q': 'e', 'r': 'e',
-        'v': 'e', 'w': 'e', 'x': 'e', 'y': 'e', 'z': 'e'
+        'i': 'e', 'ee': 'e'
     }
     
     char_corrections_s = {
-        'z': 's', 'c': 's', 'x': 's', 'sh': 's', 'ch': 's'
+        'z': 's', 'c': 's', 'x': 's'
     }
     
     char_corrections_t = {
-        'd': 't', 'th': 't', 'f': 't', 'r': 't', 'y': 't'
+        'd': 't', 'th': 't'
     }
     
     if first_char in char_corrections_s:

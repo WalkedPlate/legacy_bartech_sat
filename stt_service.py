@@ -25,6 +25,9 @@ NUM_WORDS = {
     "el cero": "0", "el uno": "1", "el dos": "2", "el tres": "3",
     "el cuatro": "4", "el cinco": "5", "el seis": "6", "el siete": "7",
     "el ocho": "8", "el nueve": "9",
+    "uno a": "1A", "dos a": "2A", "tres a": "3A",
+    "cuatro a": "4A", "cinco a": "5A", "seis a": "6A",
+    "siete a": "7A", "ocho a": "8A",
 
     "sero": "0", "huno": "1", "dose": "2", "trez": "3", "quattro": "4",
     "sinco": "5", "zinco": "5", "seys": "6", "ceiz": "6", "ciete": "7",
@@ -109,6 +112,22 @@ VALID_ZONES = {
     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
 }
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
+
+def filter_problematic_text(text: str) -> str:
+    """Filtra texto del modelo"""
+    unwanted = [
+        r'TURESPUESTACORTAENESPAÑOL',
+        r'TU\s*RESPUESTA\s*CORTA\s*EN\s*ESPAÑOL',
+        r'RESPUESTA\s*CORTA\s*EN\s*ESPAÑOL',
+    ]
+    cleaned = text
+    for pattern in unwanted:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'[¡!¿?.,;:()"\'\[\]{}]', '', cleaned)
+    cleaned = re.sub(r'^[-\s]+|[-\s]+$', '', cleaned)
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned
+
 def detect_confirmation(text: str) -> bool | None:
     lowered = text.lower()
     for word in AFFIRMATIVE_KEYWORDS:
@@ -245,7 +264,7 @@ def extract_plate(text: str) -> Optional[str]:
                 continue
             if (letters[0] in VALID_ZONES and 
                 not is_suspicious_plate(letters, numbers)):
-                return f"{letters}-{numbers}"
+                return f"{letters}{numbers}"
     chars = extract_chars(text)
     if len(chars) >= 6:
         first_three = chars[:3]
@@ -256,22 +275,25 @@ def extract_plate(text: str) -> Optional[str]:
         last_three.isdigit())
         if valid_format and first_three[0] in VALID_ZONES:
             if not is_suspicious_plate(first_three, last_three):
-                return f"{first_three}-{last_three}"
+                return f"{first_three}{last_three}"
     return None
 def is_valid_plate(plate: Optional[str]) -> bool:
-    if not plate or '-' not in plate:
+    """Validación flexible - acepta cualquier combinación de letras y números"""
+    if not plate:
         return False
     try:
-        letters, numbers = plate.split('-')
-        valid_format = ((len(letters) == 3 and len(numbers) == 3) or
-                       (len(letters) == 2 and len(numbers) == 4))
-        if not (letters[0].isalpha() and 
-        (letters[1].isalpha() or letters[1].isdigit()) and 
-        letters[2].isalpha() and numbers.isdigit() and valid_format):
+        clean_plate = plate.replace('-', '')
+        if len(clean_plate) > 10:
             return False
-        if letters[0] not in VALID_ZONES:
+        if len(clean_plate) < 3:
             return False
-        if is_suspicious_plate(letters, numbers):
+        has_letter = any(c.isalpha() for c in clean_plate)
+        has_number = any(c.isdigit() for c in clean_plate)
+        if not (has_letter and has_number):
+            return False
+        if not clean_plate.isalnum():
+            return False
+        if clean_plate[0].isalpha() and clean_plate[0].upper() not in VALID_ZONES:
             return False
         return True
     except Exception:
@@ -294,6 +316,7 @@ def transcribe_optimized(audio_path: str) -> dict:
         log_prob_threshold=-1.0,
         no_speech_threshold=0.6)
         text = ''.join([seg.text for seg in segments]).strip()
+        text = filter_problematic_text(text)
         if not text or len(text) < 3:
             return {"success": False, "plate": None,
                    "message": "No se detectó voz clara en el audio",
@@ -341,12 +364,13 @@ def transcribe_general(audio_path: str) -> dict:
         no_speech_threshold=0.6,
         condition_on_previous_text=False, 
         word_timestamps=True,
-        initial_prompt="Respuesta corta en español: e, s, t, sí, no, números")
+        initial_prompt="Respuesta corta en español")
         text_segments = []
         for seg in segments:
             if seg.avg_logprob > -0.8:
                text_segments.append(seg.text)
         raw_text = ''.join(text_segments).strip()
+        raw_text = filter_problematic_text(raw_text)
         if not raw_text or len(raw_text) < 1:
           return {
             "success": False, 

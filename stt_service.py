@@ -219,6 +219,12 @@ def extract_chars(text: str) -> str:
         i += 1
     result = ''.join(chars)
     print(f"Caracteres extraídos: {result}")
+
+    # Validar longitud máxima de 6 caracteres para placas
+    if len(result) > 6:
+        print(f"Resultado muy largo ({len(result)} chars): {result} - RECHAZADO")
+        return ""
+
     return result
 def is_suspicious_plate(letters: str, numbers: str) -> bool:
     if len(letters) != 3 or len(numbers) != 3:
@@ -278,12 +284,12 @@ def extract_plate(text: str) -> Optional[str]:
                 return f"{first_three}{last_three}"
     return None
 def is_valid_plate(plate: Optional[str]) -> bool:
-    """Validación flexible - acepta cualquier combinación de letras y números"""
+    """Validación - acepta cualquier combinación de letras y números"""
     if not plate:
         return False
     try:
         clean_plate = plate.replace('-', '')
-        if len(clean_plate) > 10:
+        if len(clean_plate) > 6:
             return False
         if len(clean_plate) < 3:
             return False

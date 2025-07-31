@@ -341,37 +341,40 @@ def extract_plate(text: str) -> Optional[str]:
     print(f"[DEBUG extract_plate] No regex matches, trying extract_chars...")
     chars = extract_chars(text)
 
-    if len(chars) >= 6:
-        first_three = chars[:3]
-        last_three = chars[3:6]
+    if len(chars) == 6:  # Exactamente 6 caracteres
+        print(f"[DEBUG extract_plate] extract_chars result: '{chars}'")
 
-        print(f"[DEBUG extract_plate] extract_chars result: first_three='{first_three}', last_three='{last_three}'")
+        # VALIDACIÓN SIMPLE - SIN PATRONES ESPECÍFICOS
+        is_alphanumeric = chars.isalnum()
+        has_letter = any(c.isalpha() for c in chars)
+        has_number = any(c.isdigit() for c in chars)
+        valid_first_zone = chars[0] in VALID_ZONES
 
-        valid_format = (len(first_three) == 3 and
-                        (first_three.isalpha() or
-                         (first_three[0].isalpha() and first_three[1].isdigit() and first_three[2].isalpha())) and
-                        last_three.isdigit())
+        print(f"[DEBUG extract_plate] Validations:")
+        print(f"  - Length: {len(chars)} == 6: {len(chars) == 6}")
+        print(f"  - Alphanumeric: {is_alphanumeric}")
+        print(f"  - Has letter: {has_letter}")
+        print(f"  - Has number: {has_number}")
+        print(f"  - Valid first zone '{chars[0]}': {valid_first_zone}")
 
-        print(f"[DEBUG extract_plate] valid_format: {valid_format}")
-
-        if valid_format and first_three[0] in VALID_ZONES:
-            if not is_suspicious_plate(first_three, last_three):
-                result = f"{first_three}{last_three}"
-                print(f"[DEBUG extract_plate] EXTRACT_CHARS SUCCESS: '{result}'")
-                return result
+        if is_alphanumeric and has_letter and has_number and valid_first_zone:
+            # Verificar que no sea sospechosa (opcional, puedes quitar esta validación)
+            if not is_suspicious_plate(chars):
+                print(f"[DEBUG extract_plate] EXTRACT_CHARS SUCCESS: '{chars}'")
+                return chars
             else:
-                print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - suspicious plate: '{first_three}{last_three}'")
+                print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - suspicious plate: '{chars}'")
         else:
-            print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - invalid format or zone")
+            print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - validation failed")
     else:
-        print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - insufficient chars: {len(chars)}")
+        print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - wrong length: {len(chars)} (expected 6)")
 
     print(f"[DEBUG extract_plate] FINAL RESULT: None")
     return None
 
 
 def is_valid_plate(plate: Optional[str]) -> bool:
-    """Validación - acepta cualquier combinación de letras y números"""
+    """Validación simple - cualquier combinación alfanumérica de 6 caracteres"""
     print(f"[DEBUG is_valid_plate] Input: '{plate}'")
 
     if not plate:
@@ -379,34 +382,28 @@ def is_valid_plate(plate: Optional[str]) -> bool:
         return False
 
     try:
-        clean_plate = plate.replace('-', '')
+        clean_plate = plate.replace('-', '').upper()
         print(f"[DEBUG is_valid_plate] Clean plate: '{clean_plate}'")
 
-        if len(clean_plate) > 6:
-            print(f"[DEBUG is_valid_plate] FAILED - too long: {len(clean_plate)}")
-            return False
-        if len(clean_plate) < 3:
-            print(f"[DEBUG is_valid_plate] FAILED - too short: {len(clean_plate)}")
-            return False
-
+        # VALIDACIÓN SIMPLE
+        is_correct_length = len(clean_plate) == 6
+        is_alphanumeric = clean_plate.isalnum()
         has_letter = any(c.isalpha() for c in clean_plate)
         has_number = any(c.isdigit() for c in clean_plate)
-        print(f"[DEBUG is_valid_plate] has_letter: {has_letter}, has_number: {has_number}")
+        valid_first_zone = clean_plate[0] in VALID_ZONES if clean_plate else False
 
-        if not (has_letter and has_number):
-            print(f"[DEBUG is_valid_plate] FAILED - missing letter or number")
-            return False
+        print(f"[DEBUG is_valid_plate] Validations:")
+        print(f"  - Length == 6: {is_correct_length}")
+        print(f"  - Alphanumeric: {is_alphanumeric}")
+        print(f"  - Has letter: {has_letter}")
+        print(f"  - Has number: {has_number}")
+        print(f"  - Valid zone: {valid_first_zone}")
 
-        if not clean_plate.isalnum():
-            print(f"[DEBUG is_valid_plate] FAILED - not alphanumeric")
-            return False
+        result = (is_correct_length and is_alphanumeric and
+                  has_letter and has_number and valid_first_zone)
 
-        if clean_plate[0].isalpha() and clean_plate[0].upper() not in VALID_ZONES:
-            print(f"[DEBUG is_valid_plate] FAILED - invalid zone: '{clean_plate[0].upper()}'")
-            return False
-
-        print(f"[DEBUG is_valid_plate] SUCCESS: '{plate}' is valid")
-        return True
+        print(f"[DEBUG is_valid_plate] RESULT: {result}")
+        return result
 
     except Exception as e:
         print(f"[DEBUG is_valid_plate] EXCEPTION: {e}")

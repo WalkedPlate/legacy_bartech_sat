@@ -276,27 +276,22 @@ def extract_chars(text: str) -> str:
         return ""
 
     return result
-def is_suspicious_plate(letters: str, numbers: str) -> bool:
-    if len(letters) != 3 or len(numbers) != 3:
-        return True  
-    if letters[1].isdigit():
-        if letters[0] == letters[2] and letters[0] not in {'A', 'B', 'C'}:
-            return True  
-    else:
-        if len(set(letters)) == 1:
-            return True
-    if len(set(numbers)) == 1:
+
+
+def is_suspicious_plate(plate: str) -> bool:
+    """
+    Validación simple de placas sospechosas - solo casos muy obvios
+    """
+    if not plate or len(plate) != 6:
         return True
-    suspicious_numbers = ['000', '111', '222', '333', '444', '555', '666', '777', '888', '999']
-    if numbers in suspicious_numbers:
-        return True
-    suspicious_combos = ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF', 'GGG', 'HHH',
-        'III', 'JJJ', 'KKK', 'LLL', 'MMM', 'NNN', 'OOO', 'PPP',
-        'QQQ', 'RRR', 'SSS', 'TTT', 'UUU', 'VVV', 'WWW', 'XXX',
-        'YYY', 'ZZZ']
-    if letters in suspicious_combos:
-        return True
-    return False
+    suspicious_patterns = [
+        # Todos los caracteres iguales
+        'AAAAAA', 'BBBBBB', 'CCCCCC', 'DDDDDD', 'EEEEEE', 'FFFFFF',
+        '111111', '222222', '333333', '444444', '555555', '666666',
+        '777777', '888888', '999999', '000000',
+    ]
+
+    return plate.upper() in suspicious_patterns
 
 
 def extract_plate(text: str) -> Optional[str]:

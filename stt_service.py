@@ -297,19 +297,26 @@ def is_suspicious_plate(letters: str, numbers: str) -> bool:
     if letters in suspicious_combos:
         return True
     return False
+
+
 def extract_plate(text: str) -> Optional[str]:
     text = text.upper().strip()
+
+    print(f"[DEBUG extract_plate] Input text: '{text}'")
+
     patterns = [
         r'\b([A-Z]{3})[-\s]*(\d{3})\b',
         r'\b([A-Z]{2})[-\s]*(\d{4})\b',
         r'\b([A-Z]{3})(\d{3})\b',
         r'\b([A-Z]{3})\s+(\d{3})\b',
         r'\b([A-Z])\s+([A-Z])\s+([A-Z])\s+(\d)\s+(\d)\s+(\d)\b',
-
         r'\b([A-Z]\d[A-Z])[-\s]*(\d{3})\b'
     ]
-    for pattern  in patterns:
+
+    for i, pattern in enumerate(patterns):
         matches = re.findall(pattern, text)
+        print(f"[DEBUG extract_plate] Pattern {i + 1}: {pattern} → Matches: {matches}")
+
         for match in matches:
             if len(match) == 2:
                 letters, numbers = match
@@ -318,42 +325,93 @@ def extract_plate(text: str) -> Optional[str]:
                 numbers = ''.join(match[3:])
             else:
                 continue
-            if (letters[0] in VALID_ZONES and 
-                not is_suspicious_plate(letters, numbers)):
-                return f"{letters}{numbers}"
+
+            print(f"[DEBUG extract_plate] Processing: letters='{letters}', numbers='{numbers}'")
+
+            if (letters[0] in VALID_ZONES and
+                    not is_suspicious_plate(letters, numbers)):
+
+                result = f"{letters}{numbers}"
+                print(f"[DEBUG extract_plate] REGEX MATCH SUCCESS: '{result}'")
+                return result
+            else:
+                print(f"[DEBUG extract_plate] REGEX MATCH FAILED VALIDATION: letters='{letters}', numbers='{numbers}'")
+
+    # Si no hay match en regex, usar extract_chars
+    print(f"[DEBUG extract_plate] No regex matches, trying extract_chars...")
     chars = extract_chars(text)
+
     if len(chars) >= 6:
         first_three = chars[:3]
         last_three = chars[3:6]
+
+        print(f"[DEBUG extract_plate] extract_chars result: first_three='{first_three}', last_three='{last_three}'")
+
         valid_format = (len(first_three) == 3 and
-        (first_three.isalpha() or
-        (first_three[0].isalpha() and first_three[1].isdigit() and first_three[2].isalpha())) and
-        last_three.isdigit())
+                        (first_three.isalpha() or
+                         (first_three[0].isalpha() and first_three[1].isdigit() and first_three[2].isalpha())) and
+                        last_three.isdigit())
+
+        print(f"[DEBUG extract_plate] valid_format: {valid_format}")
+
         if valid_format and first_three[0] in VALID_ZONES:
             if not is_suspicious_plate(first_three, last_three):
-                return f"{first_three}{last_three}"
+                result = f"{first_three}{last_three}"
+                print(f"[DEBUG extract_plate] EXTRACT_CHARS SUCCESS: '{result}'")
+                return result
+            else:
+                print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - suspicious plate: '{first_three}{last_three}'")
+        else:
+            print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - invalid format or zone")
+    else:
+        print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - insufficient chars: {len(chars)}")
+
+    print(f"[DEBUG extract_plate] FINAL RESULT: None")
     return None
+
+
 def is_valid_plate(plate: Optional[str]) -> bool:
     """Validación - acepta cualquier combinación de letras y números"""
+    print(f"[DEBUG is_valid_plate] Input: '{plate}'")
+
     if not plate:
+        print(f"[DEBUG is_valid_plate] FAILED - plate is None/empty")
         return False
+
     try:
         clean_plate = plate.replace('-', '')
+        print(f"[DEBUG is_valid_plate] Clean plate: '{clean_plate}'")
+
         if len(clean_plate) > 6:
+            print(f"[DEBUG is_valid_plate] FAILED - too long: {len(clean_plate)}")
             return False
         if len(clean_plate) < 3:
+            print(f"[DEBUG is_valid_plate] FAILED - too short: {len(clean_plate)}")
             return False
+
         has_letter = any(c.isalpha() for c in clean_plate)
         has_number = any(c.isdigit() for c in clean_plate)
+        print(f"[DEBUG is_valid_plate] has_letter: {has_letter}, has_number: {has_number}")
+
         if not (has_letter and has_number):
+            print(f"[DEBUG is_valid_plate] FAILED - missing letter or number")
             return False
+
         if not clean_plate.isalnum():
+            print(f"[DEBUG is_valid_plate] FAILED - not alphanumeric")
             return False
+
         if clean_plate[0].isalpha() and clean_plate[0].upper() not in VALID_ZONES:
+            print(f"[DEBUG is_valid_plate] FAILED - invalid zone: '{clean_plate[0].upper()}'")
             return False
+
+        print(f"[DEBUG is_valid_plate] SUCCESS: '{plate}' is valid")
         return True
-    except Exception:
+
+    except Exception as e:
+        print(f"[DEBUG is_valid_plate] EXCEPTION: {e}")
         return False
+
 def transcribe_optimized(audio_path: str) -> dict:
     start_time = time.time()
     opus_path = None

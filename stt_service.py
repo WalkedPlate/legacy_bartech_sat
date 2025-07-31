@@ -473,16 +473,19 @@ def transcribe_optimized(audio_path: str) -> dict:
         plate = extract_plate(raw_text)
 
         if is_valid_plate(plate):
-            return {"success": True, "plate": plate,
-                    "message": f"Placa detectada: {plate}",
-                    "raw_text": raw_text,
-                    "confidences": confidences,
-                    "processing_time": time.time() - start_time}
+            if is_valid_plate(plate):
+                return {"success": True, "plate": plate,
+                        "message": f"Placa detectada: {plate}",
+                        "raw_text": raw_text,
+                        "confidences": segment_logprobs,
+                        "processing_time": time.time() - start_time}
         else:
             return {"success": False, "plate": None,
                     "message": "No pude determinar la matrícula",
                     "raw_text": raw_text,
+                    "confidences": segment_logprobs,
                     "processing_time": time.time() - start_time}
+
 
     except Exception as e:
         logger.error(f"Error en transcripción: {e}")

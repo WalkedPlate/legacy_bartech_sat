@@ -316,39 +316,77 @@ def transcribe_optimized(audio_path: str) -> dict:
             return {"success": False, "plate": None,
                    "message": "No se detectó voz clara en el audio",
                    "processing_time": time.time() - start_time}
-        segments, info = model.transcribe(opus_path, language="es",beam_size=5,best_of=5,
-        temperature=0.0,
-        compression_ratio_threshold=2.4,
-        log_prob_threshold=-1.0,
-        no_speech_threshold=0.6)
-        text = ''.join([seg.text for seg in segments]).strip()
-        text = filter_problematic_text(text)
-        if not text or len(text) < 3:
+
+        segments, info = model.transcribe(
+            opus_path,
+            language="es",
+
+            beam_size=3,  # menos opciones, más consistente
+            best_of=3,  # suficiente para placas
+            temperature=[0.0],  # temperatura 0 - máxima determinismo
+
+            # Umbrales para audio de caracteres individuales:
+            compression_ratio_threshold=3.0,  # mejor para repetición de caracteres
+            log_prob_threshold=-0.8,  # Menos estricto - acepta más variaciones
+            no_speech_threshold=0.5,  # más sensible a voz
+
+            condition_on_previous_text=False,  # No usar contexto previo - cada carácter independiente
+            word_timestamps=True,  # Timestamps para análisis posterior
+            prepend_punctuations="\"'([{-",  # Evitar puntuación al inicio
+            append_punctuations="\"'.。,!?:)]};}",  # Evitar puntuación al final
+
+            # PROMPT INICIAL ESPECÍFICO PARA PLACAS:
+            initial_prompt="Usuario dicta placa vehicular peruana con letras y números: U 1 A 1 2 3. Transcribir exactamente cada carácter dictado sin interpretarlo como palabras."
+        )
+
+        text_segments = []
+        confidences = []
+
+        # FILTRADO MEJORADO DE SEGMENTOS
+        for seg in segments:
+            # Filtrar por confianza mejorada para placas
+            if seg.avg_logprob > -0.9:
+                text_segments.append(seg.text)
+                confidences.append(seg.avg_logprob)
+
+        raw_text = ''.join(text_segments).strip()
+        raw_text = filter_problematic_text(raw_text)
+
+        logger.info(f"Whisper raw output: '{raw_text}'")
+        logger.info(f"Segment confidences: {confidences}")
+        logger.info(f"Audio info - language: {info.language}, probability: {info.language_probability}")
+
+        if not raw_text or len(raw_text) < 3:
             return {"success": False, "plate": None,
-                   "message": "No se detectó voz clara en el audio",
-                   "processing_time": time.time() - start_time}
-        plate = extract_plate(text)
+                    "message": "No se detectó voz clara en el audio",
+                    "processing_time": time.time() - start_time}
+
+        plate = extract_plate(raw_text)
+
         if is_valid_plate(plate):
             return {"success": True, "plate": plate,
-                   "message": f"Placa detectada: {plate}",
-                   "raw_text": text,
-                   "processing_time": time.time() - start_time}
+                    "message": f"Placa detectada: {plate}",
+                    "raw_text": raw_text,
+                    "confidences": confidences,
+                    "processing_time": time.time() - start_time}
         else:
             return {"success": False, "plate": None,
-                   "message": "No pude determinar la matrícula",
-                   "raw_text": text,
-                   "processing_time": time.time() - start_time}
+                    "message": "No pude determinar la matrícula",
+                    "raw_text": raw_text,
+                    "processing_time": time.time() - start_time}
+
     except Exception as e:
         logger.error(f"Error en transcripción: {e}")
         return {"success": False, "plate": None,
-               "message": "Error técnico en el procesamiento",
-               "processing_time": time.time() - start_time}
+                "message": "Error técnico en el procesamiento",
+                "processing_time": time.time() - start_time}
     finally:
         if opus_path and os.path.exists(opus_path):
             try:
                 os.remove(opus_path)
             except Exception:
                 pass
+
 def transcribe_general(audio_path: str) -> dict:
     start_time = time.time()
     opus_path = None

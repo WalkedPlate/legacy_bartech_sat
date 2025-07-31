@@ -113,19 +113,47 @@ VALID_ZONES = {
 }
 MAX_FILE_SIZE = 25 * 1024 * 1024  # 25MB
 
+
 def filter_problematic_text(text: str) -> str:
-    """Filtra texto del modelo"""
-    unwanted = [
+    """Filtrar texto del modelo - versión mejorada para eliminar prompt"""
+    unwanted_patterns = [
         r'TURESPUESTACORTAENESPAÑOL',
         r'TU\s*RESPUESTA\s*CORTA\s*EN\s*ESPAÑOL',
         r'RESPUESTA\s*CORTA\s*EN\s*ESPAÑOL',
+
+        # ELIMINAR COMPLETAMENTE EL PROMPT INICIAL Y VARIACIONES
+        r'usuario\s+dicta.*',
+        r'placa\s+vehicular.*',
+        r'transcribir\s+exactamente.*',
+        r'transcribir.*exactamente.*',
+        r'cada\s+carácter.*',
+        r'sin\s+interpretarlo.*',
+        r'como\s+palabras.*',
+        r'letras\s+y\s+números.*',
+
+        # PALABRAS SUELTAS DEL PROMPT SI APARECEN
+        r'\btranscribir\b',
+        r'\bexactamente\b',
+        r'\bcada\b',
+        r'\bcarácter\b',
+        r'\bdictado\b',
+        r'\binterpretarlo\b',
+        r'\bcomo\b',
+        r'\bpalabras\b',
+        r'\busuario\b',
+        r'\bvehicular\b',
+        r'\bperuana\b',
     ]
+
     cleaned = text
-    for pattern in unwanted:
+    for pattern in unwanted_patterns:
         cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+
+    # Limpiar puntuación
     cleaned = re.sub(r'[¡!¿?.,;:()"\'\[\]{}]', '', cleaned)
     cleaned = re.sub(r'^[-\s]+|[-\s]+$', '', cleaned)
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
     return cleaned
 
 def detect_confirmation(text: str) -> bool | None:
@@ -164,16 +192,30 @@ def clean_text(text: str) -> str:
     text = re.sub(r'[,.:;\-_]', ' ', text.lower())
     text = re.sub(r'[^\w\s]', '', text).strip()
     return re.sub(r'\s+', ' ', text)
+
+
 def extract_chars(text: str) -> str:
     words = clean_text(text).split()
-    print (words)
+    print(f"Palabras después de limpiar: {words}")  # Debug mejorado
     chars = []
     i = 0
     while i < len(words):
         word = words[i]
         processed = False
+
+        # Saltar palabras del prompt que no se filtraron
+        skip_words = ['transcribir', 'exactamente', 'cada', 'carácter', 'dictado',
+                      'sin', 'interpretarlo', 'como', 'palabras', 'usuario',
+                      'vehicular', 'peruana', 'letras', 'números']
+
+        if word.lower() in skip_words:
+            print(f"Saltando palabra del prompt: '{word}'")
+            i += 1
+            continue
+
+        # Resto de la lógica existente...
         if i + 2 < len(words):
-            three_word = f"{word} {words[i+1]} {words[i+2]}"
+            three_word = f"{word} {words[i + 1]} {words[i + 2]}"
             if three_word in LETTERS:
                 chars.append(LETTERS[three_word])
                 i += 3
@@ -184,8 +226,9 @@ def extract_chars(text: str) -> str:
                 i += 3
                 processed = True
                 continue
+
         if i + 1 < len(words) and not processed:
-            two_word = f"{word} {words[i+1]}"
+            two_word = f"{word} {words[i + 1]}"
             if two_word in LETTERS:
                 chars.append(LETTERS[two_word])
                 i += 2
@@ -196,6 +239,7 @@ def extract_chars(text: str) -> str:
                 i += 2
                 processed = True
                 continue
+
         if not processed:
             if word in LETTERS:
                 chars.append(LETTERS[word])
@@ -217,12 +261,18 @@ def extract_chars(text: str) -> str:
                 else:
                     print(f"Palabra no reconocida: '{word}'")
         i += 1
+
     result = ''.join(chars)
     print(f"Caracteres extraídos: {result}")
 
-    # Validar longitud máxima de 6 caracteres para placas
-    if len(result) > 6:
-        print(f"Resultado muy largo ({len(result)} chars): {result} - RECHAZADO")
+    # VALIDACIÓN DE LONGITUD PARA PLACAS
+    if len(result) != 6:
+        print(f"Resultado longitud inválida ({len(result)} chars): {result} - RECHAZADO")
+        return ""
+
+    # VALIDACIÓN Debe ser alfanumérico
+    if not result.isalnum():
+        print(f"Resultado no alfanumérico: {result} - RECHAZADO")
         return ""
 
     return result

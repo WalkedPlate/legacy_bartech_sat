@@ -213,7 +213,6 @@ def extract_chars(text: str) -> str:
             i += 1
             continue
 
-        # Resto de la lógica existente...
         if i + 2 < len(words):
             three_word = f"{word} {words[i + 1]} {words[i + 2]}"
             if three_word in LETTERS:
@@ -260,6 +259,52 @@ def extract_chars(text: str) -> str:
                     processed = True
                 else:
                     print(f"Palabra no reconocida: '{word}'")
+        i += 1
+
+        if not processed:
+            if word in LETTERS:
+                chars.append(LETTERS[word])
+                processed = True
+            elif word in NUM_WORDS:
+                chars.append(NUM_WORDS[word])
+                processed = True
+            elif word.isdigit() and len(word) <= 4:
+                chars.extend(word)
+                processed = True
+            elif word.isalpha() and len(word) <= 3:
+                chars.extend(list(word.upper()))
+                processed = True
+
+            elif len(word) > 1 and word[0].isalpha() and word[1:].isdigit():
+                letter_part = word[0]
+                number_part = word[1:]
+
+                print(f"Detectado patrón letra+números: '{word}' → '{letter_part}' + '{number_part}'")
+
+                # Mapear la letra inicial
+                if letter_part in LETTERS:
+                    chars.append(LETTERS[letter_part])
+                    print(f"Letra mapeada: '{letter_part}' → '{LETTERS[letter_part]}'")
+                elif letter_part.isalpha():
+                    chars.append(letter_part.upper())
+                    print(f"Letra directa: '{letter_part}' → '{letter_part.upper()}'")
+
+                # Agregar cada dígito del número
+                for digit in number_part:
+                    chars.append(digit)
+                    print(f"Dígito agregado: '{digit}'")
+
+                processed = True
+
+
+            else:
+                corrected = word_correction(word)
+                if corrected:
+                    chars.append(corrected)
+                    processed = True
+                else:
+                    print(f"Palabra no reconocida: '{word}'")
+
         i += 1
 
     result = ''.join(chars)

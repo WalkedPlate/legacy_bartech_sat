@@ -445,22 +445,25 @@ def transcribe_optimized(audio_path: str) -> dict:
         )
 
         text_segments = []
-        confidences = []
+        segment_logprobs = []
 
-        # FILTRADO MEJORADO DE SEGMENTOS
         for seg in segments:
-            # Filtrar por confianza mejorada para placas
-            if seg.avg_logprob > -0.6:
+            # Filtro más estricto de confianza
+            if seg.avg_logprob > -0.5:  # Más estricto que -0.9
                 text_segments.append(seg.text)
-                confidences.append(seg.avg_logprob)
+                segment_logprobs.append(seg.avg_logprob)
 
         raw_text = ''.join(text_segments).strip()
-        raw_text = filter_problematic_text(raw_text)
 
+        # LOGGING CORREGIDO - SIN DIVISION BY ZERO
         logger.info(f"Raw Whisper output: '{raw_text}'")
         logger.info(f"Language detection confidence: {info.language_probability:.3f}")
-        logger.info(
-            f"Average log probability: {sum(seg.avg_logprob for seg in segments) / len(list(segments)) if segments else 0:.3f}")
+        logger.info(f"Segments processed: {len(text_segments)}")
+        if segment_logprobs:
+            avg_logprob = sum(segment_logprobs) / len(segment_logprobs)
+            logger.info(f"Average log probability: {avg_logprob:.3f}")
+        else:
+            logger.info(f"Average log probability: N/A (no segments)")
 
         if not raw_text or len(raw_text) < 3:
             return {"success": False, "plate": None,

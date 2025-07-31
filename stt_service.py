@@ -339,78 +339,113 @@ def is_suspicious_plate(plate: str) -> bool:
     return plate.upper() in suspicious_patterns
 
 
-def extract_plate(text: str) -> Optional[str]:
-    text = text.upper().strip()
+def extract_chars(text: str) -> str:
+    words = clean_text(text).split()
+    print(f"Palabras después de limpiar: {words}")
+    chars = []
+    i = 0
 
-    print(f"[DEBUG extract_plate] Input text: '{text}'")
+    while i < len(words):
+        word = words[i]
+        processed = False
 
-    patterns = [
-        r'\b([A-Z]{3})[-\s]*(\d{3})\b',
-        r'\b([A-Z]{2})[-\s]*(\d{4})\b',
-        r'\b([A-Z]{3})(\d{3})\b',
-        r'\b([A-Z]{3})\s+(\d{3})\b',
-        r'\b([A-Z])\s+([A-Z])\s+([A-Z])\s+(\d)\s+(\d)\s+(\d)\b',
-        r'\b([A-Z]\d[A-Z])[-\s]*(\d{3})\b'
-    ]
+        # Saltar palabras del prompt
+        skip_words = ['transcribir', 'exactamente', 'cada', 'carácter', 'dictado',
+                      'sin', 'interpretarlo', 'como', 'palabras', 'usuario',
+                      'vehicular', 'peruana', 'letras', 'números']
 
-    for i, pattern in enumerate(patterns):
-        matches = re.findall(pattern, text)
-        print(f"[DEBUG extract_plate] Pattern {i + 1}: {pattern} → Matches: {matches}")
+        if word.lower() in skip_words:
+            print(f"Saltando palabra del prompt: '{word}'")
+            i += 1
+            continue
 
-        for match in matches:
-            if len(match) == 2:
-                letters, numbers = match
-            elif len(match) == 6:
-                letters = ''.join(match[:3])
-                numbers = ''.join(match[3:])
-            else:
+        # Buscar frases de 3 palabras
+        if i + 2 < len(words):
+            three_word = f"{word} {words[i + 1]} {words[i + 2]}"
+            if three_word in LETTERS:
+                chars.append(LETTERS[three_word])
+                i += 3
+                processed = True
+                continue
+            elif three_word in NUM_WORDS:
+                chars.append(NUM_WORDS[three_word])
+                i += 3
+                processed = True
                 continue
 
-            print(f"[DEBUG extract_plate] Processing: letters='{letters}', numbers='{numbers}'")
+        # Buscar frases de 2 palabras
+        if i + 1 < len(words) and not processed:
+            two_word = f"{word} {words[i + 1]}"
+            if two_word in LETTERS:
+                chars.append(LETTERS[two_word])
+                i += 2
+                processed = True
+                continue
+            elif two_word in NUM_WORDS:
+                chars.append(NUM_WORDS[two_word])
+                i += 2
+                processed = True
+                continue
 
-            if (letters[0] in VALID_ZONES and
-                    not is_suspicious_plate(letters, numbers)):
+        # Procesar palabra individual
+        if not processed:
+            if word in LETTERS:
+                chars.append(LETTERS[word])
+                processed = True
+            elif word in NUM_WORDS:
+                chars.append(NUM_WORDS[word])
+                processed = True
+            elif word.isdigit() and len(word) <= 4:
+                chars.extend(word)
+                processed = True
+            elif word.isalpha() and len(word) <= 3:
+                chars.extend(list(word.upper()))
+                processed = True
+            elif len(word) > 1 and word[0].isalpha() and word[1:].isdigit():
+                # Patrón letra+números (ej: "o2768")
+                letter_part = word[0]
+                number_part = word[1:]
 
-                result = f"{letters}{numbers}"
-                print(f"[DEBUG extract_plate] REGEX MATCH SUCCESS: '{result}'")
-                return result
+                print(f"Detectado patrón letra+números: '{word}' → '{letter_part}' + '{number_part}'")
+
+                # Mapear la letra inicial
+                if letter_part in LETTERS:
+                    chars.append(LETTERS[letter_part])
+                    print(f"Letra mapeada: '{letter_part}' → '{LETTERS[letter_part]}'")
+                elif letter_part.isalpha():
+                    chars.append(letter_part.upper())
+                    print(f"Letra directa: '{letter_part}' → '{letter_part.upper()}'")
+
+                # Agregar cada dígito del número
+                for digit in number_part:
+                    chars.append(digit)
+                    print(f"Dígito agregado: '{digit}'")
+
+                processed = True
             else:
-                print(f"[DEBUG extract_plate] REGEX MATCH FAILED VALIDATION: letters='{letters}', numbers='{numbers}'")
+                # Intentar corrección como último recurso
+                corrected = word_correction(word)
+                if corrected:
+                    chars.append(corrected)
+                    processed = True
+                else:
+                    print(f"Palabra no reconocida: '{word}'")
 
-    # Si no hay match en regex, usar extract_chars
-    print(f"[DEBUG extract_plate] No regex matches, trying extract_chars...")
-    chars = extract_chars(text)
+        i += 1
 
-    if len(chars) == 6:  # Exactamente 6 caracteres
-        print(f"[DEBUG extract_plate] extract_chars result: '{chars}'")
+    result = ''.join(chars)
+    print(f"Caracteres extraídos: {result}")
 
-        # VALIDACIÓN SIMPLE - SIN PATRONES ESPECÍFICOS
-        is_alphanumeric = chars.isalnum()
-        has_letter = any(c.isalpha() for c in chars)
-        has_number = any(c.isdigit() for c in chars)
-        valid_first_zone = chars[0] in VALID_ZONES
+    # Validaciones finales
+    if len(result) != 6:
+        print(f"Resultado longitud inválida ({len(result)} chars): {result} - RECHAZADO")
+        return ""
 
-        print(f"[DEBUG extract_plate] Validations:")
-        print(f"  - Length: {len(chars)} == 6: {len(chars) == 6}")
-        print(f"  - Alphanumeric: {is_alphanumeric}")
-        print(f"  - Has letter: {has_letter}")
-        print(f"  - Has number: {has_number}")
-        print(f"  - Valid first zone '{chars[0]}': {valid_first_zone}")
+    if not result.isalnum():
+        print(f"Resultado no alfanumérico: {result} - RECHAZADO")
+        return ""
 
-        if is_alphanumeric and has_letter and has_number and valid_first_zone:
-            # Verificar que no sea sospechosa (opcional, puedes quitar esta validación)
-            if not is_suspicious_plate(chars):
-                print(f"[DEBUG extract_plate] EXTRACT_CHARS SUCCESS: '{chars}'")
-                return chars
-            else:
-                print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - suspicious plate: '{chars}'")
-        else:
-            print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - validation failed")
-    else:
-        print(f"[DEBUG extract_plate] EXTRACT_CHARS FAILED - wrong length: {len(chars)} (expected 6)")
-
-    print(f"[DEBUG extract_plate] FINAL RESULT: None")
-    return None
+    return result
 
 
 def is_valid_plate(plate: Optional[str]) -> bool:

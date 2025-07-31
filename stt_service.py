@@ -421,22 +421,27 @@ def transcribe_optimized(audio_path: str) -> dict:
             opus_path,
             language="es",
 
-            beam_size=3,  # menos opciones, más consistente
-            best_of=3,  # suficiente para placas
-            temperature=[0.0],  # temperatura 0 - máxima determinismo
+            # MÁXIMO DETERMINISMO
+            beam_size=2,
+            best_of=1,
+            temperature=0.0,  # NO usar lista, solo valor único
 
-            # Umbrales para audio de caracteres individuales:
-            compression_ratio_threshold=3.0,  # mejor para repetición de caracteres
-            log_prob_threshold=-0.8,  # Menos estricto - acepta más variaciones
-            no_speech_threshold=0.5,  # más sensible a voz
+            # Umbrales más estrictos para mayor consistencia
+            compression_ratio_threshold=2.0,  #  estricto
+            log_prob_threshold=-0.6,  #  estricto
+            no_speech_threshold=0.4,  # estricto
 
-            condition_on_previous_text=False,  # No usar contexto previo - cada carácter independiente
-            word_timestamps=True,  # Timestamps para análisis posterior
-            prepend_punctuations="\"'([{-",  # Evitar puntuación al inicio
-            append_punctuations="\"'.。,!?:)]};}",  # Evitar puntuación al final
+            # CONFIGURACIONES PARA MÁXIMA REPRODUCIBILIDAD
+            condition_on_previous_text=False,  # Sin contexto previo
+            word_timestamps=False,
+            prepend_punctuations="",  # Vacío
+            append_punctuations="",  # Vacío
 
-            # PROMPT INICIAL ESPECÍFICO PARA PLACAS:
-            initial_prompt="Usuario dicta placa vehicular peruana con letras y números: U 1 A 1 2 3. Transcribir exactamente cada carácter dictado sin interpretarlo como palabras."
+            # PROMPT
+            initial_prompt="Dictado de placa vehicular: letras y números separados.",
+
+            # CONFIGURACIONES ADICIONALES PARA DETERMINISMO
+            without_timestamps=True,  # Sin timestamps internos
         )
 
         text_segments = []
@@ -445,16 +450,17 @@ def transcribe_optimized(audio_path: str) -> dict:
         # FILTRADO MEJORADO DE SEGMENTOS
         for seg in segments:
             # Filtrar por confianza mejorada para placas
-            if seg.avg_logprob > -0.9:
+            if seg.avg_logprob > -0.6:
                 text_segments.append(seg.text)
                 confidences.append(seg.avg_logprob)
 
         raw_text = ''.join(text_segments).strip()
         raw_text = filter_problematic_text(raw_text)
 
-        logger.info(f"Whisper raw output: '{raw_text}'")
-        logger.info(f"Segment confidences: {confidences}")
-        logger.info(f"Audio info - language: {info.language}, probability: {info.language_probability}")
+        logger.info(f"Raw Whisper output: '{raw_text}'")
+        logger.info(f"Language detection confidence: {info.language_probability:.3f}")
+        logger.info(
+            f"Average log probability: {sum(seg.avg_logprob for seg in segments) / len(list(segments)) if segments else 0:.3f}")
 
         if not raw_text or len(raw_text) < 3:
             return {"success": False, "plate": None,
